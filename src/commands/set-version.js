@@ -4,6 +4,7 @@ const aws = require('aws-sdk'),
 	retriableWrap = require('../util/retriable-wrap'),
 	loggingWrap = require('../util/logging-wrap'),
 	readEnvVarsFromOptions = require('../util/read-env-vars-from-options'),
+  waitUntilNotPending = require('../tasks/wait-until-not-pending'),
 	updateEnvVars = require('../tasks/update-env-vars'),
 	apiGWUrl = require('../util/apigw-url'),
 	NullLogger = require('../util/null-logger'),
@@ -29,7 +30,11 @@ module.exports = function setVersion(options, optionalLogger) {
 			logger.logStage('updating configuration');
 			return Promise.resolve()
 				.then(() => lambda.getFunctionConfiguration({FunctionName: lambdaConfig.name}).promise())
-				.then(functionConfiguration => updateEnvVars(options, lambda, lambdaConfig.name, functionConfiguration.Environment && functionConfiguration.Environment.Variables));
+        .then(functionConfiguration => {
+          return waitUntilNotPending(lambda, lambdaConfig.name, 5000, 15).then(() => updateEnvVars(options, lambda, lambdaConfig.name, functionConfiguration.Environment && functionConfiguration.Environment.Variables));
+        }).then(result => {
+          return waitUntilNotPending(lambda, lambdaConfig.name, 5000, 15).then(() => result);
+        });
 		};
 
 	if (!options.version) {
